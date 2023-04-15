@@ -1,0 +1,24 @@
+
+K8_pod = dict
+hms-hmcollector.yaml
+hms-pmdbd.yaml
+hms-postgresql-util.yaml
+hms-postgresql.yaml
+hms_badger_api.yaml
+hms_badger_job_api.yaml
+hms_mariadb.yaml
+
+
+d = dict([
+    (badger-db-util.yaml $FILE),
+    (badger-db-util.yaml, $FILE),
+    (hms-hmcollector.yaml, $FILE),
+    (hms-pmdbd.yaml, $FILE),
+    (hms-postgresql-util.yaml, $FILE),
+    (hms-postgresql.yaml, $FILE),
+    (hms_badger_api.yaml, $FILE),
+    (hms_badger_job_api.yaml, $FILE),
+    (hms_mariadb.yaml, $FILE),
+    (<key>, $FILE),
+    (<key>, $FILE),
+])
