@@ -1,0 +1,22 @@
+ARG BASE_IMAGE=bluefringe-docker-local.artifactory.swg-devops.com/net-eng-tools/base_phusion_java8:20220624
+
+FROM $BASE_IMAGE
+ARG CONTRAST_AGENT_VERSION=3.14.0.26897
+ARG CONTRAST__API__API_KEY
+ARG CONTRAST__API__SERVICE_KEY
+ARG CONTRAST__API__USER_NAME
+ARG CONTRAST__API__URL
+
+ADD https://repo1.maven.org/maven2/com/contrastsecurity/contrast-agent/$CONTRAST_AGENT_VERSION/contrast-agent-$CONTRAST_AGENT_VERSION.jar /opt/contrast/contrast.jar
+COPY files/contrast_security.yaml /opt/contrast/contrast_security.yaml
+
+ENV CONTRAST_OPTS "-javaagent:/opt/contrast/contrast.jar \
+-Dcontrast.config.path=/opt/contrast/contrast_security.yaml"
+
+ENV JAVA_TOOL_OPTIONS $CONTRAST_OPTS \
+    -Dcontrast.api.url=$CONTRAST__API__URL \
+    -Dcontrast.api.api_key=$CONTRAST__API__API_KEY \
+    -Dcontrast.api.service_key=$CONTRAST__API__SERVICE_KEY \
+    -Dcontrast.api.user_name=$CONTRAST__API__USER_NAME
+
+CMD ["java","-jar", "/opt/contrast/contrast.jar"]

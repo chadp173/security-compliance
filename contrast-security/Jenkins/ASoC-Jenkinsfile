@@ -1,0 +1,883 @@
+NODE_LABEL="dev-chad"
+
+// For list, keep them outside of Pipeline section in order to be used by function.
+TAGS_TO_UPDATE = [ 'WEB_TAG', 'BFA_TAG', 'KEYSTONE_TAG', 'SVC_TAG', 'DE_POL_APP_TAG', 'DE_EXPAND_TAG', 'DE_POL_CHECK_TAG', 'DE_IPASSIGN_TAG', 'DE_FROMSL_TAG','DE_ATT_DIAG_TAG','DE_ATT_TAG', 'RDB_TAG']
+
+pipeline {
+
+    // Control agent in each stage to avoid parallel runs
+    agent none
+
+
+    // Increasing timeout for env with regression test
+    options {
+         disableConcurrentBuilds()
+         timeout(time:4, unit: 'HOURS')
+         buildDiscarder(logRotator(numToKeepStr: '40'))
+         }
+
+    parameters {
+
+    string(name: 'GIT_BRANCH',
+        description: 'Default Branch to deploy from',
+        defaultValue: '*/master')
+    string(name: 'SLACK_BUILDS_CHANNEL',
+        description: 'Default Slack channel to send messages to',
+        defaultValue: '#bf-pipeline-core')
+
+    } // parameters
+
+    environment {
+
+    // Global variables
+    // Environment specific - update for each environment:
+    DOMAIN='fringe.ibm.com'
+    ENV_NAME='dev-chad'
+    FQDN_AUTH='${ENV_NAME}-auth.${DOMAIN}'
+    FQDN_API='${ENV_NAME}-api.${DOMAIN}'
+    FQDN_PORTAL='${ENV_NAME}.${DOMAIN}'
+    FQDN_BFA_API='${ENV_NAME}-bfa-api.${DOMAIN}'
+    FQDN_EDGE_API='${ENV_NAME}-bfa-api.${DOMAIN}'
+
+    CIOCSSP_EDGE_URL="https://${FQDN_EDGE_API}"
+
+    CIOCSSP_BFA_URL="https://${FQDN_BFA_API}"
+
+    CIOCSSP_APP_PROJ="admin"
+    CIOCSSP_APP_NAME="admin"
+
+    CIOCSSP_APP_PASS_ID="CIOCSSP_APP_PASS"
+    CIOCSSP_USER_PASS_ID="CIOCSSP_USER_PASS"
+
+    //https://jsw.ibm.com/browse/NEISANTSL-198 (Artifacts creds)
+    SNAPSHOT_ARTIFACTORY_USER = "jo_grant@us.ibm.com"
+    SNAPSHOT_ARTIFACTORY_PASS = credentials('JENKINS-SNAPSHOT_ARTIFACTORY_PASS_ID')
+
+    // Used by deployment scripts - do not move.
+    DOCKER_HOST_IP = '9.207.131.66'
+    KEYSTONE_PROXY_HOST ="${FQDN_AUTH}"
+    DB_HOST_NAME= "${DOCKER_HOST_IP}"
+
+
+    CIOCSSP_EXTERNAL_HOST="${FQDN_API}"
+    CIOCSSP_EXTERNAL_URL="https://${FQDN_API}"
+
+    PORTAL_EXTERNAL_HOST="${FQDN_PORTAL}"
+    PORTAL_EXTERNAL_URL="https://${FQDN_PORTAL}"
+
+    DIGICERT_CA_CERT_FILE_FRINGE_SVC_PATH="./temp_digicert_ca.pem"
+    BFAPPID_KEYTAB_FILE_FRINGE_SVC_PATH="./temp_bfappid_ro.keytab"
+    SERVICE_NOW_PRIVATE_KEY_FILE_FRINGE_DE_ATT_DIAG_PATH="./temp_nso_port_test"
+
+    ENV="dev"
+    // Variable for deployment type - used by deployment variables
+    DEPLOYMENT_TYPE="dev"
+
+    // Leave those properties here as they are required (to clone git repo) before we load Properties
+    CREDENTIALS_ID = 'jenkins-ghe-priv-key'
+    GIT_REPO = 'git@github.ibm.com:NetEngTools/ciocssp-core.git'
+
+    CLEAN_ENV="yes | ./prepare_deployment.sh -c"
+    PREPARE_ENV="./prepare_deployment.sh -t ${DEPLOYMENT_TYPE}"
+    BUILD_CMD="./bin/build_src.sh"
+    DEPLOY_RDB="./bin/deploy_ciocssp_attempt.sh -t ${DEPLOYMENT_TYPE} -x"
+    DEPLOY_KEYSTONE="./bin/deploy_ciocssp_attempt.sh -t ${DEPLOYMENT_TYPE} -k"
+    DEPLOYMENT_CMD="./bin/deploy_ciocssp_attempt.sh -t ${DEPLOYMENT_TYPE} -r"
+    REGISTER_CMD="./bin/deploy_ciocssp_attempt.sh -t ${DEPLOYMENT_TYPE} -g"
+
+    ARTIFACTORY_DOCKER_API_KEY="ARTIFACTORY_DOCKER_API_KEY"
+    ARTIFACTORY_DOCKER_URL="bluefringe-docker-local.artifactory.swg-devops.com"
+
+    SRC_PATH="/home/jenkins/workspace/${env.JOB_NAME}"
+
+      CORE_TEST_TAG="BRONZE"
+      WEB_TEST_TAG="BRONZE"
+
+    // BEGIN Vault configuration NEISANTSRE-367
+    VAULT_CREDENTIAL_ID='vault-app-role-project-cio-neteng-ant-bluefringe'
+    VAULT_ROOT='generic/project/cio-neteng-ant-bluefringe/dev'
+    VAULT_CONTAINERS_BASE='${VAULT_ROOT}/containers'
+    VAULT_SHARED_BASE='${VAULT_ROOT}/shared'
+    VAULT_URL='https://vserv-us.sos.ibm.com:8200'
+    VAULT_ENGINE_VERSION=1
+    FRINGE_SVC_SECRET_ENV_FILE_PATH="containers/secret-fringe_svc.env"
+    FRINGE_ANALYTICS_SVC_SECRET_ENV_FILE_PATH="containers/secret-fringe_analytics_svc.env"
+    FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH="containers/secret-fringe_de_att120.env"
+    FRINGE_DE_ATT_DIAG_SECRET_ENV_FILE_PATH="containers/secret-fringe_de_att_diag.env"
+    FRINGE_DE_EXPAND_SECRET_ENV_FILE_PATH="containers/secret-fringe_de_expand.env"
+    FRINGE_DE_FROMSL_SECRET_ENV_FILE_PATH="containers/secret-fringe_de_fromsl.env"
+    FRINGE_DE_IPASSIGN_SECRET_ENV_FILE_PATH="containers/secret-fringe_de_ipassign.env"
+    FRINGE_DE_POLICY_APPROVE_SECRET_ENV_FILE_PATH="containers/secret-fringe_de_policy_approve.env"
+    FRINGE_DE_POLICY_CHECK_SECRET_ENV_FILE_PATH="containers/secret-fringe_de_policy_check.env"
+    EDGE_SVC_SECRET_ENV_FILE_PATH="containers/secret-edge_svc.env"
+    // END Vault configuration NEISANTSRE-367
+
+    CIOCSSP_HOST="https://'${ENV_NAME}-auth.${DOMAIN}':5000"
+    CIOCSSP_URL="https://${FQDN_PORTAL}/"
+    ARTIFACTORY_URL="https://na.artifactory.swg-devops.com/artifactory"
+    ARTIFACTORY_SERVER_ID="na-artifactory-swg-devops"
+    ART_GENERAL_PATH="bluefringe-generic-local/tests"
+    ARTIFACTORY_APIKEY = credentials('artifactory-apikey')
+    ARTIFACTORY_DIR="${FQDN_PORTAL}-${BUILD_NUMBER}"
+    UI_AUTOMATION_SETUP_CMD="./bin/qa_setup.sh"
+    WEB_SMOKE_TEST_CMD="bin/ciocssp_test.sh -host $CIOCSSP_HOST -gui $CIOCSSP_URL -artKey $ARTIFACTORY_APIKEY -artDir $ARTIFACTORY_DIR -uiTag $WEB_TEST_TAG -frontendSuite s"
+    CORE_SMOKE_TEST_CMD="bin/ciocssp_test.sh -host $CIOCSSP_HOST -gui $CIOCSSP_URL -artKey $ARTIFACTORY_APIKEY -artDir $ARTIFACTORY_DIR -coreTag $CORE_TEST_TAG -coreSuite s"
+    WEB_REGRESSION_TEST_CMD="bin/ciocssp_test.sh -host $CIOCSSP_HOST -gui $CIOCSSP_URL -artKey $ARTIFACTORY_APIKEY -artDir $ARTIFACTORY_DIR -uiTag $WEB_TEST_TAG -frontendSuite r"
+    CORE_REGRESSION_TEST_CMD="bin/ciocssp_test.sh -host $CIOCSSP_HOST -gui $CIOCSSP_URL -artKey $ARTIFACTORY_APIKEY -artDir $ARTIFACTORY_DIR -coreTag $CORE_TEST_TAG -coreSuite r"
+
+    CORE_DL_REPORT_CMD="curl -H \"X-JFrog-Art-Api:${ARTIFACTORY_APIKEY}\" -O ${ARTIFACTORY_URL}/$ART_GENERAL_PATH/${ARTIFACTORY_DIR}/run_core.tar.gz && tar -xvzf run_core.tar.gz -C ./${ARTIFACTORY_DIR}/ || exit 0"
+    WEB_DL_REPORT_CMD="curl -H \"X-JFrog-Art-Api:${ARTIFACTORY_APIKEY}\" -O ${ARTIFACTORY_URL}/$ART_GENERAL_PATH/${ARTIFACTORY_DIR}/run_ui.tar.gz && tar -xvzf run_ui.tar.gz -C ./${ARTIFACTORY_DIR}/ || exit 0"
+
+    ENV_FILE_PATH="./containers/ciocssp-${DEPLOYMENT_TYPE}.env"
+    // Update repo variable file. Example: component TAG to deploy.
+    ENV_FILE_PATH_VAR="./variables-dev.env"
+    DEV_ENV_FILE_PATH_VAR="./variables.env"
+
+    // Vault env file - env specific
+    // Control Vault path to get secrets from
+    SECRET_ENV_FILE_PATH="./containers/secrets.env"
+
+    ENV_TYPE="dev"
+
+    CIOCSSP_EDGE_HOST="${FQDN_EDGE_API}"
+
+    // Slack configuration
+    SLACK_COLOR_DANGER  = '#E01563'
+    SLACK_COLOR_INFO    = '#6ECADC'
+    SLACK_COLOR_WARNING = '#FFC300'
+    SLACK_COLOR_GOOD    = '#3EB991'
+
+
+    TAG_IMAGE_ON_SUCCESS = "SILVER"
+    IMAGE_TAG_TO_DEPLOY="BRONZE"
+
+    // BEGIN KEYSTONE SSO config - stage w3id
+    KEYSTONE_OIDC_PROVIDER_ISSUER="https://preprod.login.w3.ibm.com/oidc/endpoint/default"
+    KEYSTONE_OIDC_PROVIDER_JWKS_URI="https://preprod.login.w3.ibm.com/oidc/endpoint/default/jwks"
+    KEYSTONE_OIDC_PROVIDER_AUTHORIZATION_ENDPOINT="https://preprod.login.w3.ibm.com/oidc/endpoint/default/authorize"
+    KEYSTONE_OIDC_PROVIDER_TOKEN_ENDPOINT="https://preprod.login.w3.ibm.com/oidc/endpoint/default/token"
+    KEYSTONE_W3ID_PROVIDER="w3id"
+    KEYSTONE_W3ID_REMOTE_ID="https://preprod.login.w3.ibm.com/oidc/endpoint/default"
+    KEYSTONE_W3ID_MAPPING="w3id-openid-preprod"
+    // END KEYSTONE SSO config - stage w3id
+
+    // Disable registration for all environments by default
+    // Environments that need it will include register stage
+    // https://jsw.ibm.com/browse/NEISANTSRE-337
+    SKIP_REGISTER="true"
+    }
+    stages {
+        stage('Init agent container') {
+            agent {
+                    node {label NODE_LABEL }
+                  }
+            steps {
+                    echo 'Ensuring jenkins agent container is active'
+                    sh """
+                    echo "Ensuring jenkins agent container is active" > /tmp/tmp.txt
+                    cat /tmp/tmp.txt
+                    """
+                  }
+        }
+        stage("Clean Workspace"){
+            agent {
+                    node {label NODE_LABEL }
+                  }
+            steps{
+                   step([$class: 'WsCleanup'])
+                 }
+        }
+        stage ("Git checkout"){
+
+            agent {
+                // TODO - move label to env variables
+                node {label NODE_LABEL }
+            }
+
+            steps {
+
+                timeout(time: 180, unit: 'SECONDS') {
+
+                    checkout([$class           : 'GitSCM',
+                              branches         : [[name: GIT_BRANCH]],
+                              submoduleCfg     : [],
+                              doGenerateSubmoduleConfigurations: false,
+                              userRemoteConfigs: [[credentialsId: CREDENTIALS_ID,
+                                                   url          : GIT_REPO]]])
+            }
+        }
+    }
+
+
+        stage ("Prepare"){
+            agent {
+                node {label NODE_LABEL }
+            }
+            steps{
+                inject_docker_tls_certs()
+                inject_vault_secrets_docker_registry_login()
+                sh """
+                    ${PREPARE_ENV}
+                """
+            }
+        }
+        stage ("Clean standalone services"){
+                    agent {
+                        node {label NODE_LABEL }
+                    }
+            steps{
+               sh """
+                  bin/deploy_ciocssp.sh -ds
+               """
+               sh """
+                   bin/deploy_ciocssp.sh -da
+               """
+               sh """
+                  docker volume prune -f
+               """
+            }
+        }
+
+        stage ("Prepare environment"){
+              agent {
+                  node {label NODE_LABEL }
+              }
+
+              steps{
+                  // sh """
+                  //     ${CLEAN_ENV}
+                  // """
+                  sh """
+                      rm -rf ./bin
+                      rm -rf ./containers
+                  """
+                  sh """
+                      ${PREPARE_ENV}
+                  """
+              }
+        }
+
+        stage ("Update Image tag"){
+              agent {
+                  node { label NODE_LABEL }
+              }
+
+              steps {
+
+                  //Set image tags to be deployed
+                  update_image_tags(TAGS_TO_UPDATE)
+              }
+        }
+        stage ("Update DB hostname"){
+            agent {
+                node { label NODE_LABEL }
+            }
+
+            steps {
+                sh """
+                    sed -i "s/FRINGE_DATABASE_HOST_NAME=.*/FRINGE_DATABASE_HOST_NAME=${DB_HOST_NAME}/g" ${ENV_FILE_PATH}
+                """
+            }
+        }
+
+        stage ("Update env variable details"){
+                  agent {
+                      node {label NODE_LABEL }
+                  }
+
+                  steps {
+                      sh """
+                          ## Inject external keystone values.
+                          cat <<- _EOF_ >>$ENV_FILE_PATH
+                          ## Proxied (Rancher) external shared keystone
+                          CONTROLLER_EXTERNAL_HOST=$KEYSTONE_PROXY_HOST
+                          CONTROLLER_EXTERNAL_URL=https://$KEYSTONE_PROXY_HOST:5000/v3
+                          ## API and Services
+                          ## ================
+                          CIOCSSP_EXTERNAL_HOST=$CIOCSSP_EXTERNAL_HOST
+                          CIOCSSP_EXTERNAL_URL=$CIOCSSP_EXTERNAL_URL
+                          CIOCSSP_BFA_HOST=$FQDN_BFA_API
+                          CIOCSSP_BFA_URL=$CIOCSSP_BFA_URL
+                          CIOCSSP_EDGE_HOST=$FQDN_EDGE_API
+                          CIOCSSP_EDGE_URL=$CIOCSSP_EDGE_URL
+                          ## UI Portal
+                          ## =========
+                          PORTAL_EXTERNAL_HOST=$PORTAL_EXTERNAL_HOST
+                          PORTAL_EXTERNAL_URL=$PORTAL_EXTERNAL_URL
+_EOF_
+                      """
+                    sh """
+                        ## Inject SYSLOG SERVER details.
+                        cat <<- _EOF_ >>$ENV_FILE_PATH
+                        FRINGE_SYSLOG_SERVER=syslog-a.us-south.logging.cloud.ibm.com
+                        FRINGE_SYSLOG_SERVER_PORT=29791
+                        FRINGE_SYSLOG_SERVER_TYPE=TCP
+                        FRINGE_SYSLOG_SERVER_SEMANTIC=syslog-a.us-south.logging.cloud.ibm.com
+                        FRINGE_SYSLOG_SERVER_PORT_SEMANTIC=29791
+                        FRINGE_SYSLOG_SERVER_TYPE_SEMANTIC=TCP
+                        FRINGE_LOG_DNA_HOST=https://logs.us-south.logging.cloud.ibm.com/logs/ingest
+                        FRINGE_LOG_TYPE=test-core
+_EOF_
+                      """
+
+                  }
+        }
+
+        stage ("Grab logdna key from vault"){
+            agent {
+                node {label NODE_LABEL }
+            }
+
+            steps {
+              inject_vault_secrets_logdna_env()
+            }
+        }
+        stage ("Inject per-container vault secrets into .env files"){
+            agent {
+                node {label NODE_LABEL }
+            }
+
+            steps {
+                inject_vault_secrets_fringe_svc_env()
+                inject_vault_secrets_fringe_analytics_svc_env()
+                inject_vault_secrets_fringe_de_att120_env()
+                inject_vault_secrets_fringe_de_att_diag_env()
+                inject_vault_secrets_fringe_de_expand_env()
+                inject_vault_secrets_fringe_de_fromsl_env()
+                inject_vault_secrets_fringe_de_ipassign_env()
+                inject_vault_secrets_fringe_de_policy_approve_env()
+                inject_vault_secrets_fringe_de_policy_check_env()
+                inject_vault_secrets_edge_svc_env()
+            }
+        }
+        // Run based on flag
+        stage ("Deploy rdb container"){
+            agent {
+                node {label NODE_LABEL }
+            }
+            steps{
+                sh """
+                    ${DEPLOY_RDB}
+                """
+            }
+        }
+
+        // Run based on flag
+        stage ("Deploy local Keystone container") {
+              agent {
+                  node { label NODE_LABEL }
+              }
+              steps {
+                  inject_vault_secrets_keystone_env()
+                  sh """
+                        ${DEPLOY_KEYSTONE}
+                  """
+              }
+        }
+
+        stage ("Run register scripts") {
+            agent {
+                node { label NODE_LABEL }
+            }
+            steps {
+                sh """
+                    ${REGISTER_CMD}
+                """
+            }
+        }
+
+        stage ("Deploy Bluefringe"){
+            agent {
+                node {label NODE_LABEL }
+            }
+
+            steps{
+              timeout(time: 60, unit: 'MINUTES') {
+                    sh """
+                        ${DEPLOYMENT_CMD}
+                    """
+            }
+            }
+        }
+
+        // Injects keytab and certs https://jsw.ibm.com/browse/NEISANTSRE-530
+        stage ("Prepare keytab and certs for fringe_analytics_svc") {
+            agent {
+                node {label NODE_LABEL }
+            }
+            steps {
+                inject_vault_secrets_fringe_analytics_svc_files()
+                // copy injected certs from local workspace into fringe_analytics_svc container then remove local files
+                sh """
+                    docker exec -i fringe_analytics_svc bash -c "mkdir -p /etc/ssl/certs && touch /etc/ssl/certs/digicert_ca.pem && touch /etc/ssl/certs/daldl_ca.pem && chmod 600 /etc/ssl/certs/digicert_ca.pem && chmod 600 /etc/ssl/certs/daldl_ca.pem"
+
+                    # 2 identical files were provided for this cert with different names, so copying it into container twice
+                    docker cp ${DIGICERT_CA_CERT_FILE_FRINGE_SVC_PATH} fringe_analytics_svc:/etc/ssl/certs/digicert_ca.pem
+                    docker cp ${DIGICERT_CA_CERT_FILE_FRINGE_SVC_PATH} fringe_analytics_svc:/etc/ssl/certs/daldl_ca.pem
+
+                    docker exec -i fringe_analytics_svc bash -c "chmod 600 /etc/ssl/certs/digicert_ca.pem && chmod 600 /etc/ssl/certs/daldl_ca.pem"
+
+                    rm ${DIGICERT_CA_CERT_FILE_FRINGE_SVC_PATH}
+                """
+
+                // copy injected keytab file from local workspace into fringe_analytics_svc container then remove local files
+                sh """
+                    docker exec -i fringe_analytics_svc bash -c "mkdir -p /etc/krb5 && touch /etc/krb5/bfappid_ro.keytab && chmod 600 /etc/krb5/bfappid_ro.keytab"
+
+                    docker cp ${BFAPPID_KEYTAB_FILE_FRINGE_SVC_PATH} fringe_analytics_svc:/etc/krb5/bfappid_ro.keytab
+
+                    docker exec -i fringe_analytics_svc bash -c "chmod 600 /etc/krb5/bfappid_ro.keytab"
+
+                    rm ${BFAPPID_KEYTAB_FILE_FRINGE_SVC_PATH}
+                """
+            }
+        }
+
+        stage ("Pull Test Images For Tests") {
+            agent {
+                node {label NODE_LABEL }
+            }
+            steps {
+                sh """
+                    docker pull ${ARTIFACTORY_DOCKER_URL}/net-eng-tools/fringe_web_test:${WEB_TEST_TAG} ||  if [ "${WEB_TEST_TAG}" = "local" ];then true; fi
+                    docker pull ${ARTIFACTORY_DOCKER_URL}/net-eng-tools/fringe_core_test:${CORE_TEST_TAG}  ||   if [ "${CORE_TEST_TAG}" = "local" ];then true; fi
+                """
+            }
+        }
+
+        stage ("Run tests."){
+            agent {
+                node {label NODE_LABEL }
+            }
+            // Most secrets injection is now into env files for docker containers
+            // But UI_AUTOMATION_SETUP_CMD requires CIOCSSP_APP_PASS in Jenkins job env
+            // https://jsw.ibm.com/browse/NEISANTSRE-60
+            // https://jsw.ibm.com/browse/NEISANTSRE-265
+
+            environment {
+                CIOCSSP_APP_PASS=credentials('CIOCSSP_APP_PASS_CREDENTIAL_ID')
+            }
+
+            steps {
+                sh """
+                    sleep 10
+                """
+                sh """
+                    ${CORE_SMOKE_TEST_CMD}
+                """
+                sh """
+                    ${UI_AUTOMATION_SETUP_CMD}
+                """
+                sh """
+                    ${WEB_SMOKE_TEST_CMD}
+                """
+            }
+        }
+
+        stage ("Run regression tests."){
+            agent {
+                 node {label NODE_LABEL }
+            }
+
+            steps {
+                sh """
+                 ${CORE_REGRESSION_TEST_CMD}
+                """
+             }
+         }
+
+        stage ("Clean docker space"){
+            agent {
+                node {label NODE_LABEL }
+            }
+
+            steps {
+                sh """
+                   docker system prune -a -f
+                """
+            }
+        }
+      }
+
+      post {
+          always {
+              node(NODE_LABEL) {
+                  sh """
+                      mkdir ${ARTIFACTORY_DIR}/
+                      ${CORE_DL_REPORT_CMD}
+                  """
+                  sh """
+                      ${WEB_DL_REPORT_CMD}
+                  """
+                  junit allowEmptyResults: true, testResults: '**/results/*.xml'
+              }
+          }
+
+          aborted {
+
+            echo "Sending message to Slack"
+            slackSend (color: "${env.SLACK_COLOR_WARNING}",
+                       channel: "${params.SLACK_BUILDS_CHANNEL}",
+                       message: "*ABORTED:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} by ${env.USER_ID}\n More info at: ${env.BUILD_URL}")
+          } // aborted
+
+          failure {
+            echo "Sending message to Slack"
+
+            slackSend (color: "${env.SLACK_COLOR_DANGER}",
+                       channel: "${params.SLACK_BUILDS_CHANNEL}",
+                       message: "*FAILED:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} by ${env.USER_ID}\n More info at: ${env.BUILD_URL}")
+          } // failure
+
+          success {
+            echo "Sending message to Slack"
+            slackSend (color: "${env.SLACK_COLOR_GOOD}",
+                       channel: "${params.SLACK_BUILDS_CHANNEL}",
+                       message: "*SUCCESS:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} by ${env.USER_ID}\n More info at: ${env.BUILD_URL}")
+          } // success
+      }
+}
+
+def update_image_tags(tags) {
+    for (int i = 0; i < tags.size(); i++) {
+         sh """
+            sed -i "s/${tags[i]}=.*/${tags[i]}=${IMAGE_TAG_TO_DEPLOY}/g" ${ENV_FILE_PATH_VAR}
+         """
+         sh """
+            sed -i "s/${tags[i]}=.*/${tags[i]}=${IMAGE_TAG_TO_DEPLOY}/g" ${DEV_ENV_FILE_PATH_VAR}
+         """
+    }
+}
+
+// BEGIN docker client cert injection NEISANTSRE-45
+// Injects docker client certificates into jenkins agent env
+// Docker TLS client certificates are stored as jenkins credentials (not vault credentials) because
+// they are used by the Jenkins YAD plugin to communiate with docker hosts.
+// In newer versions of jenkins it's possible to set DOCKER_CERT_PATH=credentials(...) in top-level environment
+// But this failed, see NEISANTSRE-45
+// Instead, place ca, key, and cert in ~/.docker where docker expects them when DOCKER_TLS_VERIFY=1
+def inject_docker_tls_certs() {
+    withCredentials([
+        dockerCert(credentialsId: 'jenkins-fringe-docker-client-dev', variable: 'DOCKER_CERT_PATH'),
+    ]) {
+        sh """
+            mkdir -p ${HOME}/.docker
+            cp ${DOCKER_CERT_PATH}/ca.pem ${HOME}/.docker/ca.pem
+            cp ${DOCKER_CERT_PATH}/key.pem ${HOME}/.docker/key.pem
+            cp ${DOCKER_CERT_PATH}/cert.pem ${HOME}/.docker/cert.pem
+        """
+    }
+}
+// END docker client cert injection NEISANTSRE-45
+
+// BEGIN vault injections NEISANTSRE-367
+
+def inject_vault_secrets_keystone_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/keystone/env/KEYSTONE_OIDC_CLIENT_ID', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'KEYSTONE_OIDC_CLIENT_ID']]],
+      [path: VAULT_CONTAINERS_BASE + '/keystone/env/KEYSTONE_OIDC_CLIENT_SECRET', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'KEYSTONE_OIDC_CLIENT_SECRET']]],
+      [path: VAULT_CONTAINERS_BASE + '/keystone/env/KEYSTONE_OIDC_CRYPTO_PASSPHRASE', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'KEYSTONE_OIDC_CRYPTO_PASSPHRASE']]]
+    ]
+    // Only the first 3 are secrets. Rest are injected into secrets.env but just config
+    // variables that may vary on different envs
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/KEYSTONE_OIDC_CLIENT_ID=.*/KEYSTONE_OIDC_CLIENT_ID=${KEYSTONE_OIDC_CLIENT_ID}/g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s/KEYSTONE_OIDC_CLIENT_SECRET=.*/KEYSTONE_OIDC_CLIENT_SECRET=${KEYSTONE_OIDC_CLIENT_SECRET}/g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s/KEYSTONE_OIDC_CRYPTO_PASSPHRASE=.*/KEYSTONE_OIDC_CRYPTO_PASSPHRASE=${KEYSTONE_OIDC_CRYPTO_PASSPHRASE}/g" ${SECRET_ENV_FILE_PATH}
+
+            sed -i "s|KEYSTONE_OIDC_PROVIDER_ISSUER=.*|KEYSTONE_OIDC_PROVIDER_ISSUER=${KEYSTONE_OIDC_PROVIDER_ISSUER}|g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s|KEYSTONE_OIDC_PROVIDER_JWKS_URI=.*|KEYSTONE_OIDC_PROVIDER_JWKS_URI=${KEYSTONE_OIDC_PROVIDER_JWKS_URI}|g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s|KEYSTONE_OIDC_PROVIDER_AUTHORIZATION_ENDPOINT=.*|KEYSTONE_OIDC_PROVIDER_AUTHORIZATION_ENDPOINT=${KEYSTONE_OIDC_PROVIDER_AUTHORIZATION_ENDPOINT}|g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s|KEYSTONE_OIDC_PROVIDER_TOKEN_ENDPOINT=.*|KEYSTONE_OIDC_PROVIDER_TOKEN_ENDPOINT=${KEYSTONE_OIDC_PROVIDER_TOKEN_ENDPOINT}|g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s|KEYSTONE_W3ID_PROVIDER=.*|KEYSTONE_W3ID_PROVIDER=${KEYSTONE_W3ID_PROVIDER}|g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s|KEYSTONE_W3ID_REMOTE_ID=.*|KEYSTONE_W3ID_REMOTE_ID=${KEYSTONE_W3ID_REMOTE_ID}|g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s|KEYSTONE_W3ID_MAPPING=.*|KEYSTONE_W3ID_MAPPING=${KEYSTONE_W3ID_MAPPING}|g" ${SECRET_ENV_FILE_PATH}
+            sed -i "s|KEYSTONE_OIDC_REDIRECT_URI=.*|KEYSTONE_OIDC_REDIRECT_URI=https://${FQDN_AUTH}:5000/v3/OS-FEDERATION/identity_providers/w3id/protocols/openid/auth|g" ${SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def build_vault_configuration() {
+    return [vaultUrl: VAULT_URL, vaultCredentialId: VAULT_CREDENTIAL_ID, engineVersion: VAULT_ENGINE_VERSION]
+}
+
+def inject_vault_secrets_logdna_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_SHARED_BASE + '/logdna/env/VAULT_FRINGE_LOG_DNA_KEY', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'VAULT_FRINGE_LOG_DNA_KEY']]]
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/FRINGE_LOG_DNA_KEY=.*/FRINGE_LOG_DNA_KEY=${VAULT_FRINGE_LOG_DNA_KEY}/g" ${SECRET_ENV_FILE_PATH}
+            # Keystone container runs logdna-agent, which reads key from LOGDNA_AGENT_KEY variable
+            sed -i "s/LOGDNA_AGENT_KEY=.*/LOGDNA_AGENT_KEY=${VAULT_FRINGE_LOG_DNA_KEY}/g" ${SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+// This authenticates the docker client running in the jenkins agent to the registry with
+// credentials from vault. Jenkins also has registry credentials used to pull agent images,
+// But this explicitly logs in using vault
+
+def inject_vault_secrets_docker_registry_login() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_SHARED_BASE + '/docker/env/REGISTRY_HOST', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'REGISTRY_HOST']]],
+      [path: VAULT_SHARED_BASE + '/docker/env/REGISTRY_PASSWORD', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'REGISTRY_PASSWORD']]],
+      [path: VAULT_SHARED_BASE + '/docker/env/REGISTRY_USERNAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'REGISTRY_USERNAME']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh 'echo "${REGISTRY_PASSWORD}" | docker login -u "${REGISTRY_USERNAME}" --password-stdin "${REGISTRY_HOST}"'
+    }
+}
+
+// Now the individual containers - these all follow patterns
+def inject_vault_secrets_fringe_svc_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_svc/env/CONTROLLER_ADMIN_USER', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CONTROLLER_ADMIN_USER']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_svc/env/CONTROLLER_ADMIN_PASSWORD', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CONTROLLER_ADMIN_PASSWORD']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CONTROLLER_ADMIN_USER=.*/CONTROLLER_ADMIN_USER=${CONTROLLER_ADMIN_USER}/g" ${FRINGE_SVC_SECRET_ENV_FILE_PATH}
+            sed -i "s/CONTROLLER_ADMIN_PASSWORD=.*/CONTROLLER_ADMIN_PASSWORD=${CONTROLLER_ADMIN_PASSWORD}/g" ${FRINGE_SVC_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_analytics_svc_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_analytics_svc/env/CONTROLLER_ADMIN_USER', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CONTROLLER_ADMIN_USER']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_analytics_svc/env/CONTROLLER_ADMIN_PASSWORD', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CONTROLLER_ADMIN_PASSWORD']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_analytics_svc/env/BFA_MONGO_USER', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'BFA_MONGO_USER']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_analytics_svc/env/BFA_MONGO_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'BFA_MONGO_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CONTROLLER_ADMIN_USER=.*/CONTROLLER_ADMIN_USER=${CONTROLLER_ADMIN_USER}/g" ${FRINGE_ANALYTICS_SVC_SECRET_ENV_FILE_PATH}
+            sed -i "s/CONTROLLER_ADMIN_PASSWORD=.*/CONTROLLER_ADMIN_PASSWORD=${CONTROLLER_ADMIN_PASSWORD}/g" ${FRINGE_ANALYTICS_SVC_SECRET_ENV_FILE_PATH}
+            sed -i "s/BFA_MONGO_USER=.*/BFA_MONGO_USER=${BFA_MONGO_USER}/g" ${FRINGE_ANALYTICS_SVC_SECRET_ENV_FILE_PATH}
+            sed -i "s/BFA_MONGO_PASS=.*/BFA_MONGO_PASS=${BFA_MONGO_PASS}/g" ${FRINGE_ANALYTICS_SVC_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_de_att120_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att120/env/CIOCSSP_APP_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att120/env/CIOCSSP_APP_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att120/env/CIOCSSP_USER_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att120/env/CIOCSSP_USER_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att120/env/SNAPSHOT_ARTIFACTORY_USER', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'SNAPSHOT_ARTIFACTORY_USER']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att120/env/SNAPSHOT_ARTIFACTORY_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'SNAPSHOT_ARTIFACTORY_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att120/env/SNAPSHOT_COS_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'SNAPSHOT_COS_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CIOCSSP_APP_NAME=.*/CIOCSSP_APP_NAME=${CIOCSSP_APP_NAME}/g" ${FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_APP_PASS=.*/CIOCSSP_APP_PASS=${CIOCSSP_APP_PASS}/g" ${FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_NAME=.*/CIOCSSP_USER_NAME=${CIOCSSP_USER_NAME}/g" ${FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_PASS=.*/CIOCSSP_USER_PASS=${CIOCSSP_USER_PASS}/g" ${FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH}
+            sed -i "s/SNAPSHOT_ARTIFACTORY_USER=.*/SNAPSHOT_ARTIFACTORY_USER=${SNAPSHOT_ARTIFACTORY_USER}/g" ${FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH}
+            sed -i "s/SNAPSHOT_ARTIFACTORY_PASS=.*/SNAPSHOT_ARTIFACTORY_PASS=${SNAPSHOT_ARTIFACTORY_PASS}/g" ${FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH}
+            sed -i "s/SNAPSHOT_COS_PASS=.*/SNAPSHOT_COS_PASS=${SNAPSHOT_COS_PASS}/g" ${FRINGE_DE_ATT120_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_de_att_diag_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att_diag/env/CIOCSSP_APP_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att_diag/env/CIOCSSP_APP_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att_diag/env/CIOCSSP_USER_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_att_diag/env/CIOCSSP_USER_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CIOCSSP_APP_NAME=.*/CIOCSSP_APP_NAME=${CIOCSSP_APP_NAME}/g" ${FRINGE_DE_ATT_DIAG_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_APP_PASS=.*/CIOCSSP_APP_PASS=${CIOCSSP_APP_PASS}/g" ${FRINGE_DE_ATT_DIAG_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_NAME=.*/CIOCSSP_USER_NAME=${CIOCSSP_USER_NAME}/g" ${FRINGE_DE_ATT_DIAG_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_PASS=.*/CIOCSSP_USER_PASS=${CIOCSSP_USER_PASS}/g" ${FRINGE_DE_ATT_DIAG_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_de_expand_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_expand/env/CIOCSSP_APP_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_expand/env/CIOCSSP_APP_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_expand/env/CIOCSSP_USER_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_expand/env/CIOCSSP_USER_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CIOCSSP_APP_NAME=.*/CIOCSSP_APP_NAME=${CIOCSSP_APP_NAME}/g" ${FRINGE_DE_EXPAND_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_APP_PASS=.*/CIOCSSP_APP_PASS=${CIOCSSP_APP_PASS}/g" ${FRINGE_DE_EXPAND_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_NAME=.*/CIOCSSP_USER_NAME=${CIOCSSP_USER_NAME}/g" ${FRINGE_DE_EXPAND_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_PASS=.*/CIOCSSP_USER_PASS=${CIOCSSP_USER_PASS}/g" ${FRINGE_DE_EXPAND_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_de_fromsl_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_fromsl/env/CIOCSSP_APP_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_fromsl/env/CIOCSSP_APP_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_fromsl/env/CIOCSSP_USER_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_fromsl/env/CIOCSSP_USER_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CIOCSSP_APP_NAME=.*/CIOCSSP_APP_NAME=${CIOCSSP_APP_NAME}/g" ${FRINGE_DE_FROMSL_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_APP_PASS=.*/CIOCSSP_APP_PASS=${CIOCSSP_APP_PASS}/g" ${FRINGE_DE_FROMSL_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_NAME=.*/CIOCSSP_USER_NAME=${CIOCSSP_USER_NAME}/g" ${FRINGE_DE_FROMSL_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_PASS=.*/CIOCSSP_USER_PASS=${CIOCSSP_USER_PASS}/g" ${FRINGE_DE_FROMSL_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_de_ipassign_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_ipassign/env/CIOCSSP_APP_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_ipassign/env/CIOCSSP_APP_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_ipassign/env/CIOCSSP_USER_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_ipassign/env/CIOCSSP_USER_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CIOCSSP_APP_NAME=.*/CIOCSSP_APP_NAME=${CIOCSSP_APP_NAME}/g" ${FRINGE_DE_IPASSIGN_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_APP_PASS=.*/CIOCSSP_APP_PASS=${CIOCSSP_APP_PASS}/g" ${FRINGE_DE_IPASSIGN_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_NAME=.*/CIOCSSP_USER_NAME=${CIOCSSP_USER_NAME}/g" ${FRINGE_DE_IPASSIGN_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_PASS=.*/CIOCSSP_USER_PASS=${CIOCSSP_USER_PASS}/g" ${FRINGE_DE_IPASSIGN_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_de_policy_approve_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_approve/env/CIOCSSP_APP_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_approve/env/CIOCSSP_APP_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_approve/env/CIOCSSP_USER_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_approve/env/CIOCSSP_USER_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CIOCSSP_APP_NAME=.*/CIOCSSP_APP_NAME=${CIOCSSP_APP_NAME}/g" ${FRINGE_DE_POLICY_APPROVE_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_APP_PASS=.*/CIOCSSP_APP_PASS=${CIOCSSP_APP_PASS}/g" ${FRINGE_DE_POLICY_APPROVE_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_NAME=.*/CIOCSSP_USER_NAME=${CIOCSSP_USER_NAME}/g" ${FRINGE_DE_POLICY_APPROVE_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_PASS=.*/CIOCSSP_USER_PASS=${CIOCSSP_USER_PASS}/g" ${FRINGE_DE_POLICY_APPROVE_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_fringe_de_policy_check_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_check/env/CIOCSSP_APP_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_check/env/CIOCSSP_APP_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_APP_PASS']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_check/env/CIOCSSP_USER_NAME', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_NAME']]],
+      [path: VAULT_CONTAINERS_BASE + '/fringe_de_policy_check/env/CIOCSSP_USER_PASS', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CIOCSSP_USER_PASS']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CIOCSSP_APP_NAME=.*/CIOCSSP_APP_NAME=${CIOCSSP_APP_NAME}/g" ${FRINGE_DE_POLICY_CHECK_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_APP_PASS=.*/CIOCSSP_APP_PASS=${CIOCSSP_APP_PASS}/g" ${FRINGE_DE_POLICY_CHECK_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_NAME=.*/CIOCSSP_USER_NAME=${CIOCSSP_USER_NAME}/g" ${FRINGE_DE_POLICY_CHECK_SECRET_ENV_FILE_PATH}
+            sed -i "s/CIOCSSP_USER_PASS=.*/CIOCSSP_USER_PASS=${CIOCSSP_USER_PASS}/g" ${FRINGE_DE_POLICY_CHECK_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+def inject_vault_secrets_edge_svc_env() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/edge_svc/env/CONTROLLER_ADMIN_USER', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CONTROLLER_ADMIN_USER']]],
+      [path: VAULT_CONTAINERS_BASE + '/edge_svc/env/CONTROLLER_ADMIN_PASSWORD', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'CONTROLLER_ADMIN_PASSWORD']]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            sed -i "s/CONTROLLER_ADMIN_USER=.*/CONTROLLER_ADMIN_USER=${CONTROLLER_ADMIN_USER}/g" ${EDGE_SVC_SECRET_ENV_FILE_PATH}
+            sed -i "s/CONTROLLER_ADMIN_PASSWORD=.*/CONTROLLER_ADMIN_PASSWORD=${CONTROLLER_ADMIN_PASSWORD}/g" ${EDGE_SVC_SECRET_ENV_FILE_PATH}
+        """
+    }
+}
+
+// END vault injection functions NEISANTSRE-367
+
+// BEGIN vault secrets injection functions NEISANTSRE-530
+def inject_vault_secrets_fringe_analytics_svc_files() {
+    def configuration = build_vault_configuration()
+    def vaultSecrets = [
+      [path: VAULT_CONTAINERS_BASE + '/fringe_analytics_svc/files/DIGICERT_CA_CERT_FILE', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'DIGICERT_CA_CERT_FILE' ]]],
+      // _BIN file is base64-encoded and must be decoded back into binary
+      [path: VAULT_CONTAINERS_BASE + '/fringe_analytics_svc/files/BFAPPID_KEYTAB_FILE_BIN', engineVersion: VAULT_ENGINE_VERSION, secretValues:
+        [[vaultKey: 'BFAPPID_KEYTAB_FILE_BIN' ]]],
+    ]
+    withVault([configuration: configuration, vaultSecrets: vaultSecrets]) {
+        sh """
+            echo "writing ${DIGICERT_CA_CERT_FILE_FRINGE_SVC_PATH}"
+            cat <<< "${DIGICERT_CA_CERT_FILE}" > "${DIGICERT_CA_CERT_FILE_FRINGE_SVC_PATH}" && truncate -s -1 "${DIGICERT_CA_CERT_FILE_FRINGE_SVC_PATH}"
+            echo "writing ${BFAPPID_KEYTAB_FILE_FRINGE_SVC_PATH}"
+            echo "${BFAPPID_KEYTAB_FILE_BIN}" | base64 -d > "${BFAPPID_KEYTAB_FILE_FRINGE_SVC_PATH}"
+        """
+    }
+}
+
+// END vault secrets injection functions NEISANTSRE-530

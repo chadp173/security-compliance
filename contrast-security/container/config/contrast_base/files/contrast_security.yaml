@@ -1,0 +1,19 @@
+api:
+  url: https://app.contrastsecurity.com/Contrast
+  api_key: vgy5soZn15wnVPHH539pF8F7niofbl4N
+  service_key: EMODO7ZF2MWAP798
+  user_name: agent_142bb017-de7e-4af7-b5b9-f0782aa6d369@Ibm
+application:
+  metadate: bU="Finance and Operations"
+  group: Bluefringe
+server:
+  name: bronze-fringe
+  environment: development
+agent:
+  logger:
+    path: contrast_trace.log
+    stdout: true
+  java:
+    standalone_app_name: bronze-fringe
+    scan_all_classes: false
+    scan_all_code_sources: false
