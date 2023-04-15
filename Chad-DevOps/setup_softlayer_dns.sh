@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
-BFROUTE="9.0.0.0/8"
+IPADDRESS=""
+BFROUTE=""
 myIP="$(curl whatsmyip.fringe.ibm.com) && echo $myIP"
 
 # Setting up Routing in resolv.conf
-if [[ "for iproute in 9.0.128.50 9.0.130.50; do cat /etc/resolv.conf | grep $iprout != $iproute ; done " ]] ;
+if [[ "for iproute in ${IPADDRESS}; do cat /etc/resolv.conf | grep $iprout != $iproute ; done " ]] ;
 then
-	[[ for DNS_IP in 9.0.128.50 9.0.130.50  do; sed -i '$a nameserver ${DNS_IP}' /etc/resolve.conf; done ]];
+	[[ for ${DNS_IP} in ${IPADDRESS}  do; sed -i '$a nameserver ${DNS_IP}' /etc/resolve.conf; done ]];
 else
 	echo "resolve.conf is setup properly"
 fi
@@ -14,7 +15,7 @@ fi
 # Setting up Route
 if [[ ip route != ${BFROUTE}  ]] ;
 then
- [[ ip route add 9.0.0.0/8 via ${myIP} dev eth0 ]] ;
+ [[ ip route add ${ROUTE} via ${myIP} dev eth0 ]] ;
 	;
 else
 	 echo "route is setup correctly" ;
