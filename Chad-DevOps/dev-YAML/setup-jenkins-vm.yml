@@ -1,0 +1,50 @@
+---
+##
+- name: Setting up Jenkins on Virtual Machine
+  hosts: '{{ TARGET }}'
+  gather_facts: no
+  become: true
+  become_user: root
+  gather_facts: true
+  vars:
+
+  tasks:
+    - name: Install Docker Daemon
+      include: setup-docker-install-daemon.yml
+######
+    - name: Setup Docker TLS
+      include: setup-docker-tls-daemon.yml
+######
+    - name: Jenkins Dependencies
+      shell: |
+        
+      args:
+        executables: /bin/bash 
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat
+######
+    - name: Upgrade all packages
+      yum:
+        name: '*'
+        state: latest
+        exclude: docker
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat
+######
+    - name: Install Jenkins
+      yum:
+        name:
+          - jenkins
+          - java-11-openjdk-devel
+      state: present
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat
+######
+    - name: restart_docker_service
+      systemd:
+        daemon_reload: yes
+      state: restarted
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat
+######
+    - name: start_jenkins_service
+      systemd:
+        state: started
+        name: jenkins
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat

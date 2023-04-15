@@ -1,0 +1,29 @@
+---
+
+- name: Compliance Update DNS for softlayer
+  hosts: '{{ SOFTLAYER_INVENTORY }}'
+  remote_user: '{{ USER }}'
+  gather_facts: false
+
+##
+  tasks:
+    - name: Transfer the script
+      copy:
+        src: "files/softlayer_dns"
+        dest: "/opt/ibm/cio-cloud-platform/fringe/infra-src/files/"
+        mode: preserve
+#     when: inventory_hostname == softlayer-all[0]
+      tags: dns, softlayer
+####
+    - name: Make script executable
+      file:
+        path: /opt/ibm/cio-cloud-platform/fringe/infra-src/files/softlayer_dns/setup_softlayer_dns.sh
+        owner: root
+        mode: u=rwx,g=rwx,o=rx
+      when: inventory_hostname == softlayer-all[0]
+      tags: dns, softlayer
+####
+    - name: Test resolv.conf and Setup
+      command: /opt/ibm/cio-cloud-platform/fringe/infra-src/files/softlayer_dns/setup_softlayer_dns.sh
+      when: inventory_hostname == softlayer-all[0]
+      tags: dns, softlayer

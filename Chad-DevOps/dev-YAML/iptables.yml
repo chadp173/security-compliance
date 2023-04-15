@@ -1,0 +1,90 @@
+  tasks:
+    - name: Setting up IPTABLE rules
+      shell: |
+          ## Set default policy and flush current rules
+          iptables -P INPUT ACCEPT
+          iptables -P FORWARD ACCEPT
+          iptables -P OUTPUT ACCEPT
+          iptables -F
+          
+          # DSN
+          iptables -A INPUT -p icmp -s 9.0.0.0/8 -j ACCEPT
+          iptables -A INPUT -p icmp -s 10.0.0.0/8 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.131.0/24 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.194.0/24 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.195.0/24 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.204.146.30.151 -j ACCEPT
+          
+          # SSH Rules
+          iptables -A INPUT -p tcp -s y03lcacchub001.maint.ahe.boulder.ibm.com -j ACCEPT
+          iptables -A INPUT -p tcp -s b03lcacchub002.maint.ahe.boulder.ibm.com -j ACCEPT          
+          iptables -A INPUT -p tcp -s y01lcacchub001.maint.ahe.pok.ibm.com -j ACCEPT
+          iptables -A INPUT -p tcp -s 172-0-0-0.lightspeed.brhmal.sbcglobal.net/8 -j ACCEPT   
+         
+          # Allow Jenkins JNLP
+          iptables -A INPUT -p tcp -s 9.207.131.0/24 --dport 50000 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.194.0/24 --dport 50000 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.195.0/24 --dport 50000 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.131.0/24 --dport 3306 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.194.0/24 --dport 3306 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.195.0/24 --dport 3306 -j ACCEPT
+
+          # Docker API 
+          iptables -A INPUT -p tcp -s 9.207.131.0/24 --match multiport --dports 2375:2376 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.194.0/24 --match multiport --dports 2375:2376 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.195.0/24 --match multiport --dports 2375:2376 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.0.0.0/8  --match multiport --dports 22,80:99,443,5000,5001,8080:8099,8350:8360,9000:9020,35357,35358,50001 -j ACCEPT
+               
+          # SMPT
+          iptables -A INPUT -p tcp -s 9.207.131.0/24 --dport 587 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.194.0/24 --dport 587 -j ACCEPT
+          iptables -A INPUT -p tcp -s 9.207.195.0/24 --dport 587 -j ACCEPT
+
+          # New Logging
+          iptables -N LOGNEW
+          iptables -A LOGNEW -j LOG  --log-prefix "IPT_CONN_NEW:" --log-level 4
+          iptables -A LOGNEW -j ACCEPT   
+          
+          ## Enable logging
+          iptables -N LOGGING
+          iptables -A INPUT -j LOGGING
+          iptables -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "IPTables-Dropped:" --log-level 5
+          iptables -A LOGGING -j DROP
+
+          # Docker 
+          iptables -A FORWARD -i docker0 -o ens192 -j ACCEPT 
+          iptables -A FORWARD -i ens192 -o docker0 -m state  --state RELATED,ESTABLISHED -j ACCEPT
+          iptables -A DOCKER  -j ACCEPT
+          iptables -A INPUT -i docker0 -j ACCEPT
+          iptables -A OUTPUT -o docker0 -j ACCEPT
+
+          ## Allow Established,Relate IN/OUT
+          iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+          iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+          iptables -A OUTPUT -m state --state NEW -j ACCEPT
+
+          ## Allow loopback connections
+          iptables -A INPUT -i lo -j ACCEPT
+          iptables -A OUTPUT -o lo -j ACCEPT
+
+          # Required for AccessHub 
+          iptables -A INPUT -s 204.146.30.151/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 129.33.207.11 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 9.17.248.143/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 9.63.39.57/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 9.56.126.11/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 10.0.0.0/8 -p icmp -j ACCEPT
+
+          ### Today June 14
+          iptables -A INPUT -p tcp -s 34.249.212.128 --dport 22 -j ACCEPT
+          iptables -A INPUT -p tcp -s 34.250.81.152 --dport 22-j ACCEPT
+
+          # update configuration file          
+          sed -i 's/IPTABLES_SAVE_ON_RESTART="no"/IPTABLES_SAVE_ON_RESTART="yes"/g' /etc/sysconfig/iptables-config
+          sed -i 's/IPTABLES_SAVE_ON_STOP="no"/IPTABLES_SAVE_ON_STOP="yes"/g' /etc/sysconfig/iptables-config
+
+          # save iptable rules
+          iptables-save > /etc/iptables.rules
+          iptables-save
+      args:
+        executable: /bin/basharg: /bin/bash

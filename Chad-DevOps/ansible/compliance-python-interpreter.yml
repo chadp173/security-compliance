@@ -1,0 +1,16 @@
+
+- name: Setting python
+  hosts: "dev-chad"
+  remote_user: "Chad.Perry1"
+  become: true
+  become_user: root
+  gather_facts: false
+
+  tasks:
+    - name: symlink /usr/bin/python -> /usr/bin/python3
+      shell: |
+        if [ -f /usr/bin/python3 ] && [ ! -f /usr/bin/python ]; then
+          ln --symbolic /usr/bin/python3 /usr/bin/python;
+        fi
+      arg:
+        executable: /bin/bash

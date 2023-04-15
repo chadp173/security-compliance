@@ -1,0 +1,21 @@
+#!/usr/bin/env bash  
+
+# install passlib 
+/usr/bin/python -m pip install passlib
+python -c "from passlib.hash import sha512_crypt; import getpass; print sha512_crypt.encrypt(getpass.getpass())" 
+
+
+- name: password Reset 
+  hosts: "{{ TARGET }}"
+  remote_user: "{{ USER }}"
+  tasks:
+  vars: 
+    ROOT_PASSWORD: "{{ python -c 'from passlib.hash import sha512_crypt; import getpass; print sha512_crypt.encrypt(getpass.getpass())' }" 
+
+- name: Change root password
+  user: "root"
+  update_password: "always"
+  password: "{{ ROOT_PASSWORD }}"
+  tags: root
+
+        

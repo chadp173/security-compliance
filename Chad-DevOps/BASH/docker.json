@@ -1,0 +1,10 @@
+{
+    "debug" : true,
+    "dns" : [
+        "9.0.130.50"
+        "9.0.128.50"
+           ], 
+           "insecure-registries" : [
+            "isdockreg101.innovate.ibm.com"    
+           ]
+}

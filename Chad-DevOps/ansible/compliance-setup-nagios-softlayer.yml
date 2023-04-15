@@ -1,0 +1,80 @@
+---
+
+- name: Setting up Nagios Repo for Softlayer
+  hosts: "{{ TARGET }}"
+  remote_user: "{{ USER }}"
+  become: true
+  become_user: root
+  gather_facts: true
+  vars:
+    VAR_FILE: secrets.yaml
+   
+  vars_files:
+    - vars/{{ VAR_FILE }}
+
+  tasks:
+    - name:
+      blockinfile:
+        path: /etc/yum.conf
+        insertafter: '^distroverpkg=centos-release'
+        block: |
+          "ip_resolve=4"
+          "proxy_username="
+          "proxy_password="
+          "proxy="
+      tags: softlayerProxy
+
+    - name: Adding ip_resove to /etc/yum.conf
+      lineinfile:
+        path:
+        insertafter: '^distroverpkg=centos-release'
+        line: "ip_resolve="
+      tags: softlayerProxy
+
+    - name: Adding proxy_username line /etc/yum.conf
+      lineinfile:
+        path: /etc/yum.conf
+        insertafter: '^distroverpkg=centos-release'
+        line: "proxy_username="
+      tags: softlayerProxy
+
+    - name: Adding proxy_username to /etc/yum.conf
+      lineinfile:
+        path: /etc/yum.conf
+        regexp: '^proxy_username='
+        line: "proxy_username={{ PROXY_USERNAME }}"
+      tags: softlayerProxy
+
+    - name: Adding proxy_password line /etc/yum.conf
+      lineinfile:
+        path: /etc/yum.conf
+        insertafter: '^distroverpkg=centos-release'
+        line: "proxy_password="
+        owner: root
+        group: root
+        mode: 0644
+      tags: softlayerProxy
+
+    - name: Adding proxy_password to /etc/yum.conf
+      lineinfile:
+        path: /etc/yum.conf
+        regexp: '^proxy_password='
+        line: "proxy_password={{ PROXY_PASSWORD }}"
+      tags: softlayerProxy
+      
+    - name: Adding proxy server line
+      lineinfile:
+        path: /etc/yum.co
+        insertafter: '^distroverpkg=centos-release'
+        line: "proxy="
+      tags: softlayerProxy
+
+    - name: Adding proxy server url
+      lineinfile:
+        path: /etc/yum.co
+        regexp: '^proxy='
+        line: "proxy={{ PROXY_SERVER }}"
+        owner: root
+        group: root
+        mode: 0644
+      tags: softlayerProxy

@@ -1,0 +1,27 @@
+- name: Configure Jenkins for docker tls
+  hosts: dev-chad
+  connection: local
+  vars:
+    # Disable cert validation since we're using a self-signed cert
+    validate_certs: no
+    jenkins:
+      username: "{{ JENKINS_USERNAME }}"
+      api_token: "{{ JENKINS_API_TOKEN }}"
+      url: '{{ JENKINS_URL }}'
+    docker:
+      image: 'bluefringe-docker-local.artifactory.swg-devops.com/net-eng-tools/jenkins_slave:20210405'
+      registry:
+        name: 'bluefringe-docker-local.artifactory.swg-devops.com'
+        username: "{{ ARTIFACTORY_USERNAME }}"
+        email: "{{ ARTIFACTORY_USERNAME }}"
+        password: "{{ ARTIFACTORY_API_KEY }}"
+      dns: '9.0.128.50'
+      volumes:
+        - 'indiana_deployments:/var/indiana_deployments'
+      client:
+        name: "jenkins-fringe-docker-client-dev"
+        ca_cert: "{{ lookup('file', 'jenkins-docker-tls-certs/dev/jenkins-fringe-ca-dev-cert.pem') }}"
+        key: "{{ lookup('file', 'jenkins-docker-tls-certs/dev/jenkins-fringe-client-dev-key.pem') }}"
+        cert: "{{ lookup('file', 'jenkins-docker-tls-certs/dev/jenkins-fringe-client-dev-cert.pem') }}"
+  roles:
+  - role: setup-jenkins-docker-tls-clouds

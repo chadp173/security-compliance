@@ -1,0 +1,126 @@
+- name: Replace resolv.conf
+  copy:
+    src: "{{ OS_HARDENING_CONFIG }}/resolv.conf"
+    dest: "/tmp/"
+    owner: root
+    group: root
+    mode: 0644
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat'
+tags: dns
+
+- name: Transfer the script
+  copy: 
+    src: files
+    dest: "/opt/ibm/cio-cloud-platform/fringe/infra-src/"
+    mode: preserve
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat'
+
+- name: Make script executable
+  file:
+    path: /opt/ibm/cio-cloud-platform/fringe/infra-src/files/setup_softlayer_dns.sh 
+    owner: root
+    mode: u=rwx,g=rwx,o=rx
+tags: dns
+- name: gathering softlayer hostnames
+  shell: softlayer=$(cat hosts-softlayer-production-infra | grep "ibm.com")
+  register: host_softlayer
+tags: dns
+
+ - name: Host details
+   debug: var=host_softlayer.stdout
+   tags: dns 
+
+- name: Setting up resolv.conf 
+  command: /opt/ibm/cio-cloud-platform/fringe/infra-src/files/setup_softlayer_dns.sh
+  when: 
+    - inventory_hostname in groups['hosts-softlayer-production-infra']
+    - ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat'
+
+
+
+    - name: Get user details
+      uri:
+        url: '{{ COLLECTOR_API_URL + item }}'
+        return_content: yes
+      with_items:
+        - '{{ sre_squad_emails }}'
+      register: identity_details
+
+    - name: Ensure group exists
+      group:
+        name: "{{ item.1.account }}"
+        gid: "{{ item.1.validation.employee_serial[2:6] }}"
+        state: present
+      with_subelements:
+        - '{{ identity_details.results }}'
+        - json
+
+    - fail:
+        msg: "Variable is not defined"
+      when: upassword is undefined
+
+    - fail:
+        msg: "Variable is empty"
+      when: upassword|length == 0
+
+    ## For UID, use stripped employee serial numbers.
+    ## Example:  employee_serial :  5G9959 => employee_serial[2:6] : 9959
+    - name: Add labeled user on app nodes
+      user:
+        name: "{{ item.1.account }}"
+        uid: "{{ item.1.validation.employee_serial[2:6] }}"
+        ## upassword is stored in vars/secrets.yaml
+        password: "{{ upassword | password_hash('sha512') }}"
+        home: /home/{{ item.1.account }}
+        comment: "{{ item.1.gecoslabel }}"
+        state: present
+        append: yes
+        group: "{{ item.1.account }}"
+        groups: "{{ item.1.account }},{{ ANT_SRE_SUDO_GROUP }}"
+        shell: /bin/bash
+      with_subelements:
+        - '{{ identity_details.results }}'
+        - json
+      when: (ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat')
+
+## Don't manipulate sudoers file as it's handled by sudoers template now.
+#    - name: Add user to sudoers
+#      lineinfile:
+#        path: /etc/sudoers
+#        state: present
+#        line: '%{{ item.1.account }}        ALL=(ALL)       PASSWD: ALL'
+#        validate: visudo -cf %s
+#        backup: yes
+#      with_subelements:
+#        - '{{ identity_details.results }}'
+#        - json
+#      when: (ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat')
+
+    - name: Change password expiration rules
+      shell: "passwd -x 90 {{ item.1.account }}"
+      with_subelements:
+        - '{{ identity_details.results }}'
+        - json
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+      #ignore_errors: True
+
+    - name: Change minimum password age rule
+      shell: "passwd -n 1 {{ item.1.account }}"
+      with_subelements:
+        - '{{ identity_details.results }}'
+        - json
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+#    ##TODO - temporary workaround - https://github.ibm.com/NetEngTools/Delivery/issues/757
+#    - name: Delete obsolete user - leave their home directory intact
+#      shell: userdel antonsre
+#      args:
+#        executable: /bin/bash
+#      ignore_errors: True
+
+#    - name: update sshd config
+#      lineinfile:
+#        path: /etc/ssh/sshd_config
+#        regexp: '^PasswordAuthentication.*no'
+#        line: 'PasswordAuthentication=yes'
+#      notify: restart_sshd

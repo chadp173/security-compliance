@@ -1,0 +1,40 @@
+---
+
+- name: Compliance root password
+  hosts: "{{ TARGET }}"
+  remote_user: '{{ USER }}'
+  become: yes
+
+  task:
+    
+    - name: Register a variable
+      shell: | 
+        cat /etc/shadow | grep -E -o round; 
+      register: shadow_contents
+      ignore_errors: True
+
+    - name: run task if value fails
+      command: 
+
+      
+    - name: Use the variable in conditional statement
+      ansible.builtin.shell: echo "motd contains the word hi"
+        when: motd_contents.stdout.find('hi') != -1
+    - name: Changing Root password
+      include_tasks: task/security-password-root.yml
+      tags: security-password-root.yml
+
+
+
+  vars:
+    root_password: "{{ new_root_password }}"
+    root_password_salt: afEMnMOBZgYNhoqA
+
+
+  tasks:
+    - name: Generate password 
+      command:  python -c "from passlib.hash import sha512_crypt; import getpass; print sha512_crypt.encrypt(getpass.getpass())"
+    - name: Change root password
+      user:
+        name: root
+        password: "{{ root_password | password_hash(salt=root_password_salt) }}"

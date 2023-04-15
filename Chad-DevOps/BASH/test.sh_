@@ -1,0 +1,15 @@
+
+#/usr/bin/env bash 
+
+NS="export $(nmcli device show | grep -E -o 9.0.0.$ip)
+
+
+for $ip in 1 2; do
+nmcli device show | grep -E -o "9.0.0.$ip;  
+if [ "$?" -ne 0 ] ;
+then
+   nmcli con mod ens192 ipv4.dns "9.0.0.1 9.0.0.2"
+else
+  nmcli device show | grep "DNS"
+fi
+done

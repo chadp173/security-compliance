@@ -1,0 +1,45 @@
+---
+
+- name: OS hardening tasks
+  hosts: '{{ TARGET }}'
+  remote_user: '{{ USER }}'
+  gather_facts: true
+  vars:
+    BLUEFRINGE_IPTABLES: "files/config/compliance"
+
+  tasks:
+######
+    - name: Setting up IPTABLE rules
+      shell: |
+          iptables -A INPUT -s 204.146.30.151/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 129.33.207.11 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 9.17.248.143/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 9.63.39.57/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 9.56.126.11/32 -p tcp -m tcp --dport 22 -j ACCEPT
+          iptables -A INPUT -s 10.0.0.0/8 -p icmp -j ACCEPT
+
+          sed -i 's/IPTABLES_SAVE_ON_RESTART="no"/IPTABLES_SAVE_ON_RESTART="yes"/g' /etc/sysconfig/iptables-config
+          sed -i 's/IPTABLES_SAVE_ON_STOP="no"/IPTABLES_SAVE_ON_STOP="yes"/g' /etc/sysconfig/iptables-config
+
+          iptables-save > /etc/iptables.rules
+          iptables-save
+      args:
+        executable: /bin/basharg: /bin/bash
+######
+    - name: Copy /etc/systemd/system/fringe-iptables.service
+      copy:
+          src: "{{ BLUEFRINGE_IPTABLES }}/fringe-iptables.service"
+          dest: /etc/systemd/system/fringe-iptables.service
+      owner: root
+      group: root
+      mode: 0644
+######
+    - name: Just force systemd to re-execute itself (2.8 and above)
+      systemd:
+      daemon_reexec: yes
+######
+    - name: Enable fringe-iptables.service
+      systemd:
+        name: fringe-iptables.service
+        state: started
+        enabled: yes

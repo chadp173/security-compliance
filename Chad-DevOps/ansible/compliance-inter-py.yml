@@ -1,0 +1,21 @@
+---
+
+- name: Setting python
+  hosts: "dev-chad"
+  remote_user: "Chad.Perry1"
+  become: true
+  become_user: root
+  gather_facts: true
+#  vars:
+#    ansible_python_interpreter: "/usr/bin/python2.7"
+
+  tasks:
+    - name: Clear gathered facts from all currently targeted hosts
+      meta: clear_facts
+
+    - name: testing jobs
+      shell: ls
+      args:
+        executable: /bin/bash
+    - debug: var=discovered_interpreter_python
+    - debug: var=ansible_cmdline

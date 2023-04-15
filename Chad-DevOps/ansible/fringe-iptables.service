@@ -1,0 +1,11 @@
+[Unit]
+Description = Apply my IPv4 Iptables Rules
+Before=network.target
+After=default.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "/sbin/iptables-restore < /etc/iptables.rules"
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,297 @@
+- fail: msg="tags and cid must be defined, please refer to Crowdstrike documentation"
+  when:
+    - tags is undefined
+    - cid is undefined
+- name: Searching for RHEL6 servers
+  block:
+    - name: Transferring Redhat6 Package...
+      copy:
+        src: "{{ rhel6_rpm }}"
+        dest: /tmp/
+
+    - name: Installing Crowdstrike sensors
+      yum:
+        name: /tmp/{{ rhel6_rpm }}
+        state: present
+    - name: Applying Tags
+      shell: /opt/CrowdStrike/falconctl -s -f --tags={{ tags }}
+    - name: Setting CID
+      shell: /opt/CrowdStrike/falconctl -s -f --cid={{ cid }}
+    - name: Configure Proxy
+      block:
+        - name: Setting Proxy configuration
+          shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy }} --app={{ port }}
+        - name: Confirming proxy configs
+          shell: /opt/CrowdStrike/falconctl -g -f --aph --app
+        - name: Enable Proxy
+          shell: /opt/CrowdStrike/falconctl -s --apd=FALSE
+      when: proxy is defined and port is defined
+    - name: Starting falcon-sensor
+      systemd:
+            name: falcon-sensor
+            state: started
+  become: true
+  when:
+          - ansible_facts['distribution'] == "RedHat"
+          - ansible_facts['distribution_major_version'] == "6"
+- name: Searching for RHEL7 servers
+  block:
+    - name: Transferring Redhat7 CS Package...
+      copy:
+        src: "{{ rhel7_rpm }}"
+        dest: /tmp/
+    - name: Installing Crowdstrike sensors
+      yum:
+        name: /tmp/{{ rhel7_rpm }}
+        state: present
+    - name: Applying Tags
+      shell: /opt/CrowdStrike/falconctl -s -f --tags={{ tags }}
+    - name: Setting CID
+      shell: /opt/CrowdStrike/falconctl -s -f --cid={{ cid }}
+    - name: Configure Proxy
+      block:
+        - name: Setting Proxy configuration
+          shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy }} --app={{ port }}
+        - name: Confirming proxy configs
+          shell: /opt/CrowdStrike/falconctl -g -f --aph --app
+        - name: Enable Proxy
+          shell: /opt/CrowdStrike/falconctl -s --apd=FALSE
+      when: proxy is defined and port is defined
+    - name: Starting falcon-sensor
+      systemd:
+            name: falcon-sensor
+            state: started
+  become: true
+  when:
+          - ansible_facts['distribution'] == "RedHat" or ansible_facts['distribution'] == "CentOS"
+          - ansible_facts['distribution_major_version'] == "7"
+- name: Searching for RHEL8 servers
+  block:
+    - name: Transferring Redhat8 CS Package...
+      copy:
+        src: "{{ rhel8_rpm }}"
+        dest: /tmp/
+
+    - name: Installing Crowdstrike sensors
+      yum:
+        name: /tmp/{{ rhel8_rpm }}
+        state: present
+    - name: Applying Tags
+      shell: /opt/CrowdStrike/falconctl -s -f --tags={{ tags }}
+    - name: Setting CID
+      shell: /opt/CrowdStrike/falconctl -s -f --cid={{ cid }}
+    - name: Configure Proxy
+      block:
+        - name: Setting Proxy configuration
+          shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy }} --app={{ port }}
+        - name: Confirming proxy configs
+          shell: /opt/CrowdStrike/falconctl -g -f --aph --app
+        - name: Enable Proxy
+          shell: /opt/CrowdStrike/falconctl -s --apd=FALSE
+      when: proxy is defined and port is defined
+    - name: Starting falcon-sensor
+      systemd:
+            name: falcon-sensor
+            state: started
+  become: true
+  when:
+          - ansible_facts['distribution'] == "RedHat"
+          - ansible_facts['distribution_major_version'] == "8"
+- name: Deploying Crowdstrike on Ubuntu18 servers
+  block:
+    - name: Transferring Ubuntu CS Package...
+      copy:
+        src: "{{ ubuntu_deb }}"
+        dest: /tmp/
+
+    - name: Installing Crowdstrike sensors
+      apt:
+        name:  /tmp/{{ ubuntu_deb }}
+        state: present
+    - name: Applying Tags
+      shell: /opt/CrowdStrike/falconctl -s -f --tags={{ tags }}
+    - name: Setting CID
+      shell: /opt/CrowdStrike/falconctl -s -f --cid={{ cid }}
+    - name: Configure Proxy
+      block:
+        - name: Setting Proxy configuration
+          shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy }} --app={{ port }}
+        - name: Confirming proxy configs
+          shell: /opt/CrowdStrike/falconctl -g -f --aph --app
+        - name: Enable Proxy
+          shell: /opt/CrowdStrike/falconctl -s --apd=FALSE
+      when: proxy is defined and port is defined
+    - name: Starting falcon-sensor
+      service:
+            name: falcon-sensor
+            state: started
+  become: true
+  when:
+    - ansible_facts['distribution'] == "Ubuntu"
+    - ansible_facts['distribution_major_version'] == "18"
+- name: Searching for SLES11 servers
+  block:
+    - name: Transferring SLES11 CS Package...
+      copy:
+        src: "{{ suse11_rpm }}"
+        dest: /tmp/
+
+    - name: Installing Crowdstrike sensors
+      zypper:
+        name: /tmp/{{ suse11_rpm }}
+        state: present
+    - name: Applying Tags
+      shell: /opt/CrowdStrike/falconctl -s -f --tags={{ tags }}
+    - name: Setting CID
+      shell: /opt/CrowdStrike/falconctl -s -f --cid={{ cid }}
+    - name: Configure Proxy
+      block:
+        - name: Setting Proxy configuration
+          shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy }} --app={{ port }}
+        - name: Confirming proxy configs
+          shell: /opt/CrowdStrike/falconctl -g -f --aph --app
+        - name: Enable Proxy
+          shell: /opt/CrowdStrike/falconctl -s --apd=FALSE
+      when: proxy is defined and port is defined
+    - name: Starting falcon-sensor
+      systemd:
+            name: falcon-sensor
+            state: started
+  become: true
+  when:
+          - ansible_facts['distribution'] == "SLES"
+          - ansible_facts['distribution_major_version'] == "11"
+- name: Searching for SLES12 servers
+  block:
+    - name: Transferring SLES12 CS Package...
+      copy:
+        src: "{{ suse12_rpm }}"
+        dest: /tmp/
+
+    - name: Installing Crowdstrike sensors
+      zypper:
+        name: /tmp/{{ suse12_rpm }}
+        state: present
+    - name: Applying Tags
+      shell: /opt/CrowdStrike/falconctl -s -f --tags={{ tags }}
+    - name: Setting CID
+      shell: /opt/CrowdStrike/falconctl -s -f --cid={{ cid }}
+    - name: Configure Proxy
+      block:
+        - name: Setting Proxy configuration
+          shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy }} --app={{ port }}
+        - name: Confirming proxy configs
+          shell: /opt/CrowdStrike/falconctl -g -f --aph --app
+        - name: Enable Proxy
+          shell: /opt/CrowdStrike/falconctl -s --apd=FALSE
+      when: proxy is defined and port is defined
+    - name: Starting falcon-sensor
+      systemd:
+            name: falcon-sensor
+            state: started
+  become: true
+  when:
+          - ansible_facts['distribution'] == "SLES"
+          - ansible_facts['distribution_major_version'] == "12"
+- name: Searching for SLES15 servers
+  block:
+    - name: Transferring SLES15 CS Package ...
+      copy:
+        src: "{{ suse15_rpm }}"
+        dest: /tmp/
+
+    - name: Installing Crowdstrike sensors
+      zypper:
+        name: /tmp/{{ suse15_rpm }}
+        state: present
+    - name: Applying Tags
+      shell: /opt/CrowdStrike/falconctl -s -f --tags={{ tags }}
+    - name: Setting CID
+      shell: /opt/CrowdStrike/falconctl -s -f --cid={{ cid }}
+    - name: Configure Proxy
+      block:
+        - name: Setting Proxy configuration
+          shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy }} --app={{ proxy }}
+        - name: Confirming proxy configs
+          shell: /opt/CrowdStrike/falconctl -g -f --aph --app
+        - name: Enable Proxy
+          shell: /opt/CrowdStrike/falconctl -s --apd=FALSE
+      when: proxy is defined and port is defined
+    - name: Starting falcon-sensor
+      systemd:
+            name: falcon-sensor
+            state: started
+  become: true
+  when:
+          - ansible_facts['distribution'] == "SLES"
+          - ansible_facts['distribution_major_version'] == "15"
+
+## The following play, will check for Carbon Black and pre-existing proxy configurations
+# and apply them to CS sensor. Afterwards, will uninstall CB on systemd systems.
+
+
+- name: Checking for Carbon Black
+  stat:
+    path: /var/opt/carbonblack/sensorsettings.ini
+  register: cb_stat
+- name: Checking for Carbon Black
+  stat:
+    path: /var/lib/cb/
+  register: cb_stat2
+# - name: Cleaning up Carbon Black on systemd systems
+#   block:
+#     - name: Looking for existing proxy configurations and applying if found
+#       block:
+#       - name: Stopping Sensor temporarily
+#         systemd:
+#               name: falcon-sensor
+#               state: stopped
+#       - name: Setting Proxy configurations
+#         shell: /opt/CrowdStrike/falconctl -s -f --aph={{ proxy_server }} --app={{ proxy_port }}
+#       - name: Confirming proxy configs
+#         shell: /opt/Crowdstrike/falconctl -g -f --aph --app
+#       - name: Enable Proxy
+#         shell: /opt/Crowdstrike/falconctl -s -f --apd=FALSE
+#       - name: Restarting sensor
+#         systemd:
+#             name: falcon-sensor
+#             state: started
+#       vars:
+#           cb_proxy: "{{ lookup('ini', 'Proxy section=CB file=/var/opt/carbonblack/sensorsettings.ini') }}"
+#           proxy_server: "{{ cb_proxy.split(':')[0] }}"
+#           proxy_port: "{{ cb_proxy.split(':')[1] }}"
+#       become: yes
+#       when:
+#           - cb_proxy[0] is defined
+#           - proxy is not defined
+#   when:
+#       - cb_stat.stat.exists or cb_stat2.stat.exists
+#       - ansible_facts['distribution'] != "Ubuntu"
+- name: Searching for CB uninstall script
+  stat:
+    path: /opt/carbonblack/response/bin/sensoruninstall.sh
+  register: cb_uninstall1
+- name: Getting rid of Carbon Black ..
+  become: yes
+  shell: /opt/carbonblack/response/bin/sensoruninstall.sh
+  when: cb_uninstall1.stat.exists
+- name: Searching for CB uninstall script
+  stat:
+    path: /opt/cbsensor/sensoruninstall.sh
+  register: cb_uninstall2
+- name: Getting rid of Carbon Black ..
+  become: yes
+  shell: /opt/cbsensor/sensoruninstall.sh
+  when: cb_uninstall2.stat.exists
+
+- name: Check CS Sensor Status..
+  shell: ps -e | grep falcon-sensor
+  register: output
+  ignore_errors: true
+- debug: var=output.stdout_lines
+- name: Verifying Sensors Connection to Cloud
+  become: yes
+  shell: netstat -tapn | grep falcon
+  register: output
+  ignore_errors: true
+- debug: var=output.stdout_lines

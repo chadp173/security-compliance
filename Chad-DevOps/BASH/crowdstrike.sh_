@@ -1,0 +1,16 @@
+
+!#/usr/bin/env bash 
+
+notfound = "aid not found"
+
+if [/opt/CrowdStrike/falconctl -g --aid == "$notFound"];
+then 
+	/usr/sbin/iptables-restore > /etc/iptables.rules 
+else 
+	/opt/CrowdStrike/falconctl -g --aid >> /tmp/falcon-sensor-status-{{ ansible_hostname }}.log
+fi 
+
+
+
+
+

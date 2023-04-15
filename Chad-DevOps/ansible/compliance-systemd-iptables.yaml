@@ -1,0 +1,38 @@
+---
+
+- name:  setup setup systemd to iptables-restore
+  hosts: '{{ TARGET }}'
+  remote_user: '{{ USER }}'
+
+  vars:
+    OS_HARDENING_CONFIG: "files/config/compliance"
+
+  tasks:
+      - name: Check that the /etc/systemd/system/fringe-iptable.service exists
+        stat:
+          path: /etc/systemd/system/fringe-iptables.service
+        register: stat_result
+
+      - name: Create the file, if it doesnt exist already
+        file:
+          path: /etc/systemd/system/fringe-iptables.service
+          state: touch
+        when: stat_result.stat.exists
+
+      - name: Replace /etc/systemd/system/fringe-iptables.service
+        copy:
+          src: "{{ OS_HARDENING_CONFIG }}/fringe-iptables.service"
+          dest: /etc/systemd/system/fringe-iptable.service
+          owner: root
+          group: root
+          mode: 0644
+
+      - name: Just force systemd to re-execute itself (2.8 and above)
+        systemd:
+          daemon_reexec: yes
+
+      - name: Enable fringe-iptables.service
+        systemd:
+          name: fringe-iptable.service
+          state: started
+          enabled: yes
