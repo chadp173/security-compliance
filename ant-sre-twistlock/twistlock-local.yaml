@@ -1,0 +1,6 @@
+services:
+  twistlock_container:  
+       build: container/twistlock/config/
+       container_name: twistlock
+       env_file:
+         - files/secret.env
