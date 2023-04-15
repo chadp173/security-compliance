@@ -1,0 +1,76 @@
+import requests
+import json
+from datetime import datetime, timedelta
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# Set the ServiceNow credentials
+SN_INSTANCE = "YOUR_INSTANCE"
+SN_API_TOKEN = "YOUR_API_TOKEN"
+
+# Set the Slack credentials and webhook URL
+SLACK_WEBHOOK_URL = "YOUR_WEBHOOK_URL"
+
+# Set the number of days for the vulnerability due date range
+DAYS_RANGE = 8
+
+# Set the ServiceNow table API endpoint for vulnerabilities
+SN_VULN_API = f"https://{SN_INSTANCE}.service-now.com/api/now/table/sn_vul_vulnerability"
+
+# Set the ServiceNow query parameters for vulnerabilities due within the specified range
+now = datetime.now().strftime('%Y-%m-%d')
+due_date_start = (datetime.now() + timedelta(days=15)).strftime('%Y-%m-%d')
+due_date_end = (datetime.now() + timedelta(days=DAYS_RANGE)).strftime('%Y-%m-%d')
+SN_VULN_QUERY = f"active=true^due_dateBETWEEN{due_date_start}@{now}^{due_date_end}"
+
+# Set the ServiceNow HTTP headers
+SN_HEADERS = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {SN_API_TOKEN}"
+}
+
+# Retrieve the vulnerabilities due within the specified range from ServiceNow
+response = requests.get(SN_VULN_API, params={"sysparm_query": SN_VULN_QUERY}, headers=SN_HEADERS)
+vulnerabilities = response.json()["result"]
+
+# Generate the Slack alert message and update incident assignment group for each vulnerability
+for vulnerability in vulnerabilities:
+    # Set the Slack message text
+    message = f"*{vulnerability['number']}* - {vulnerability['short_description']} - Due on {vulnerability['due_date']}"
+
+    # Set the Slack message payload
+    payload = {
+        "text": message,
+        "username": "ServiceNow Vulnerability Bot",
+        "icon_emoji": ":warning:",
+        "channel": "#vulnerabilities"
+    }
+
+    # Send the Slack message
+    response = requests.post(SLACK_WEBHOOK_URL, data=json.dumps(payload))
+    print(f"Sent Slack alert for vulnerability {vulnerability['number']}")
+
+    # Set the ServiceNow incident API endpoint for updating incidents
+    incident_sys_id = vulnerability['incident']['value']
+    SN_INCIDENT_API = f"https://{SN_INSTANCE}.service-now.com/api/now/table/incident/{incident_sys_id}"
+
+    # Set the ServiceNow HTTP headers for updating incidents
+    SN_INCIDENT_HEADERS = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {SN_API_TOKEN}"
+    }
+
+    # Update the incident assignment group
+    payload = {
+        "assignment_group": "<support-group-sys_id>"
+    }
+    response = requests.patch(SN_INCIDENT_API, data=json.dumps(payload), headers=SN_INCIDENT_HEADERS)
+
+    # Check the response status code
+    if response.status_code == 200:
+        print(f"Incident {incident_sys_id} was updated with assignment group <support-group-sys_id>")
+    else:
+        print(f"Error updating incident {incident_sys_id}: {response.status_code} - {response.text}")
